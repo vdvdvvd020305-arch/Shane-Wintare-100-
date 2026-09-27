@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import re
 import sys
@@ -33,10 +34,9 @@ from uuid import uuid4
 from zoneinfo import ZoneInfo
 
 # ------------------------------- CẤU HÌNH -------------------------------
-SYMBOLS = ["SPX", "NDX", "QQQ", "SPY"]  # underlying cần tính GEX (SPX→ES/SPY, NDX→NQ)
+SYMBOLS = ["SPX", "QQQ", "SPY"]  # underlying cần tính GEX (SPX→ES/SPY)
 PLAN_INSTRUMENTS = {             # sinh trade plan cho symbol nào, theo instrument gì
     "SPX": "SPY / ES futures",
-    "NDX": "NQ/MNQ futures",
     "QQQ": "QQQ",
     "SPY": "SPY / ES futures",
 }
@@ -47,6 +47,7 @@ TOLERANCE_AFTER_OPEN_MIN = 30   # dung sai chạy muộn sau giờ mở cửa
 STRIKE_WINDOW_PCT = 5.0         # chart chỉ gồm strike trong ±% so với spot
 CHART_ROWS = 13                 # số dòng chart
 NEAR_EXPIRY_DAYS = 9            # walls/chart chỉ tính option hết hạn trong N ngày
+BOT_NAME = ""                   # tên bot trong Discord; "" = dùng tên & avatar của webhook
 CONTRACT_SIZE = 100             # hệ số hợp đồng option Mỹ
 # -------------------------------------------------------------------------
 
@@ -394,17 +395,20 @@ def send_discord(webhook: str, embeds: list[dict],
     files = files or []
     for i in range(0, len(embeds), 10):
         chunk = embeds[i:i + 10]
+        msg = {"embeds": chunk}
+        if BOT_NAME:
+            msg["username"] = BOT_NAME
         attach = files if i == 0 else []
         if attach:
             boundary = "----gexbot" + uuid4().hex
-            payload = json.dumps({"username": "GEX Bot", "embeds": chunk})
+            payload = json.dumps(msg)
             body = _multipart(
                 {"payload_json": payload},
                 [(f"files[{j}]", fn, blob) for j, (fn, blob) in enumerate(attach)],
                 boundary)
             ctype = f"multipart/form-data; boundary={boundary}"
         else:
-            body = json.dumps({"username": "GEX Bot", "embeds": chunk}).encode("utf-8")
+            body = json.dumps(msg).encode("utf-8")
             ctype = "application/json"
         for attempt in range(3):
             req = urllib.request.Request(
@@ -487,6 +491,16 @@ def main(argv=None) -> int:
                     "front": lv_near["front"],
                     "near_days": near_days,
                 })
+
+            # vùng 1σ cho chart: VIX/16 (SPX/SPY) hoặc IV30
+            try:
+                if vol_index and sym in ("SPX", "SPY"):
+                    lv["implied_move_pts"] = vol_index["spot"] / 16.0 / 100.0 * lv["spot"]
+                elif chain.get("iv30"):
+                    lv["implied_move_pts"] = (chain["iv30"] / 100.0
+                                              / math.sqrt(252.0) * lv["spot"])
+            except Exception:
+                pass
 
             # vẽ chart ảnh (nếu matplotlib có && không bị tắt)
             image_file = None

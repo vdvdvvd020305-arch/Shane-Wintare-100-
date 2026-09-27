@@ -3,7 +3,6 @@
 Bot tự chạy **mỗi ngày ~5 phút trước giờ mở cửa PHI Mỹ (9:30 ET)**, tính Gamma Exposure từ options chain thật (data CBOE delayed — miễn phí, không cần API key) rồi gửi vào **Discord**:
 
 - **SPX** (kèm **VIX spot + VIX GEX**) → bản tin phân tích định lượng cho SPY/ES
-- **NDX** → gamma levels + **trade plan cho NQ/MNQ futures**
 - **QQQ, SPY** → gamma levels + trade plan cho từng ticker
 
 **Chi phí vận hành: $0** (GitHub Actions miễn phí; bot chỉ cần `pip install matplotlib` để vẽ chart ảnh).
@@ -33,9 +32,9 @@ Mỗi underlying nhận **1 embed kèm ảnh chart** (kiểu SpotGamma, dark the
 - **[3] Cảnh báo phân kỳ giá–VIX**: tín hiệu gom put âm thầm, không FOMO
 - **[4] 3 kịch bản intraday if/then** theo regime: base case (chop/nén), downside (gãy mốc → trượt về vùng thanh khoản), upside (reclaim flip / breakout + vol crush → hút về Call Wall) — mỗi kịch bản có chiến lược tham khảo
 - **Ladder**: Put Wall → PW 0DTE → SPOT → CW 0DTE → Call Wall → Flip → OI magnet
-- **Quản trị rủi ro**: điểm invalidate, whipsaw, size theo biên độ 1σ (NQ $20/pt · MNQ $2/pt · ES $50/pt)
+- **Quản trị rủi ro**: điểm invalidate, whipsaw, size theo biên độ 1σ (ES $50/pt · MES $5/pt)
 
-Xem ví dụ thật: [`sample-report.md`](sample-report.md) · ảnh mẫu: [`gex_SPX.png`](gex_SPX.png) · [`gex_NDX.png`](gex_NDX.png) · [`gex_QQQ.png`](gex_QQQ.png) · [`gex_SPY.png`](gex_SPY.png)
+Xem ví dụ thật: [`sample-report.md`](sample-report.md) · ảnh mẫu: [`gex_SPX.png`](gex_SPX.png) · [`gex_QQQ.png`](gex_QQQ.png) · [`gex_SPY.png`](gex_SPY.png)
 
 ---
 
@@ -47,7 +46,7 @@ gex-bot/
 ├── chart.py                         # vẽ chart ảnh PNG (matplotlib, dark theme)
 ├── trade_plan.py                    # bản tin [1]–[4]: Rule of 16, VIX, DEX, kịch bản
 ├── sample-report.md                 # ví dụ báo cáo (chạy --dry-run)
-├── gex_NDX.png / gex_QQQ.png / gex_SPY.png   # ảnh chart mẫu
+├── gex_SPX.png / gex_QQQ.png / gex_SPY.png   # ảnh chart mẫu
 └── .github/workflows/gex-daily.yml  # lịch chạy tự động GitHub Actions
 ```
 
@@ -97,7 +96,7 @@ Script tự biết giờ New York (DST), tự nghỉ cuối tuần + holiday NYS
 pip install matplotlib                               # chỉ cần khi vẽ chart ảnh
 python gex_bot.py --dry-run                          # xem báo cáo + ảnh, không gửi
 DISCORD_WEBHOOK_URL="https://..." python gex_bot.py --force   # gửi ngay (text + ảnh)
-python gex_bot.py --symbols NDX QQQ TSLA             # đổi danh sách ticker
+python gex_bot.py --symbols SPX QQQ TSLA             # đổi danh sách ticker
 python gex_bot.py --max-expiry-days 5                # giới hạn expiry cho toàn bộ tính toán
 python gex_bot.py --no-image                         # chỉ gửi text, không cần matplotlib
 python gex_bot.py --out report.md                    # ghi thêm báo cáo ra file
@@ -105,7 +104,7 @@ python gex_bot.py --out report.md                    # ghi thêm báo cáo ra fi
 
 Yêu cầu: Python ≥ 3.9 + `matplotlib` (bot tự fallback về text nếu thiếu). Trên **Windows** cần thêm `pip install tzdata`.
 
-> CBOE hỗ trợ hầu hết ticker Mỹ có option (SPY, QQQ, TSLA, NVDA...) và index option **NDX/SPX** (tự thêm dấu `_` khi gọi API). Riêng **giá NQ futures** không lấy từ CME được (họ chặn scraping theo điều khoản) — dùng NDX + ghi chú basis.
+> CBOE hỗ trợ hầu hết ticker Mỹ có option (SPY, QQQ, TSLA, NVDA...) và index option **NDX/SPX** (tự thêm dấu `_` khi gọi API). Muốn levels cho NQ futures thì thêm `NDX` vào `SYMBOLS`.
 
 ---
 
@@ -115,9 +114,10 @@ Sửa các biến trong khối **CẤU HÌNH** đầu file `gex_bot.py`:
 
 | Biến | Mặc định | Ý nghĩa |
 |---|---|---|
-| `SYMBOLS` | `["SPX", "NDX", "QQQ", "SPY"]` | Danh sách underlying (SPX→ES/SPY, NDX→NQ) |
-| `PLAN_INSTRUMENTS` | NDX→NQ/MNQ, QQQ, SPY→SPY/ES | Sinh trade plan cho symbol nào; xoá bớt để tắt plan |
+| `SYMBOLS` | `["SPX", "QQQ", "SPY"]` | Danh sách underlying (SPX→ES/SPY; muốn thêm NQ thì thêm `NDX`) |
+| `PLAN_INSTRUMENTS` | SPX→SPY/ES, QQQ, SPY→SPY/ES | Sinh trade plan cho symbol nào; xoá bớt để tắt plan |
 | `NEAR_EXPIRY_DAYS` | `9` | Cửa sổ gần hạn dùng cho walls + chart (0DTE/weekly/monthly tuần hết hạn) |
+| `BOT_NAME` | `""` | Tên bot trong Discord. Để trống = dùng **tên & avatar của webhook** (đổi trực tiếp trong Discord: Server Settings → Integrations → Webhooks). Đặt tên khác nếu muốn ghi đè |
 | `MINUTES_BEFORE_OPEN` | `5` | Mục tiêu gửi trước giờ mở cửa bao nhiêu phút |
 | `TOLERANCE_BEFORE_MIN` | `15` | Chấp nhận cron chạy sớm/trễ tối đa bao nhiêu phút |
 | `STRIKE_WINDOW_PCT` | `5.0` | Chart chỉ gồm strike trong ±% so với spot |
@@ -136,7 +136,6 @@ Sửa các biến trong khối **CẤU HÌNH** đầu file `gex_bot.py`:
 - **Implied move**: VIX/16 (Rule of 16, SPX/SPY dùng VIX spot CBOE) hoặc `IV30 / √252 × spot` (1σ)
 - **DEX** (Delta Exposure): `Σ delta × OI × 100 × spot` (calls +, puts −) — DEX 0DTE là dòng tiền chủ đạo của phiên
 - **VIX GEX**: net GEX trên VIX options chain — trạng thái gamma của dealer trên chính VIX
-- **NQ futures ≈ NDX + basis** (thường +0.1% đến +0.5% tuỳ lãi suất/kỳ hạn) — các mứt NDX quy đổi gần đúng 1:1 sang NQ
 
 ## ⚠️ Lưu ý & giới hạn
 
