@@ -1,0 +1,43 @@
+name: GEX Daily
+
+on:
+  schedule:
+    - cron: "25 13 * * 1-5"
+    - cron: "25 14 * * 1-5"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gex-daily
+  cancel-in-progress: false
+
+jobs:
+  gex:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install deps
+        run: pip install matplotlib
+
+      - name: Run GEX bot
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: python gex_bot.py ${{ github.event_name == 'workflow_dispatch' && '--force' || '' }}
+
+      - name: Upload charts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gex-charts
+          path: gex_*.png
+          retention-days: 14
